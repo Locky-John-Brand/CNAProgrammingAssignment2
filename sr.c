@@ -214,8 +214,13 @@ void B_input(struct pkt packet)
   struct pkt sendpkt;
   int i;
 
+  int windowIndex = (expectedseqnum - 1 + WINDOWSIZE) % SEQSPACE;
+    
+  int isInWindow = (((expectedseqnum <= windowIndex) && (packet.seqnum >= expectedseqnum && packet.seqnum <= windowIndex)) ||
+    ((expectedseqnum > windowIndex) && (packet.seqnum >= expectedseqnum || packet.seqnum <= windowIndex)));
+
   /* if not corrupted and received packet is in order */
-  if  ( (!IsCorrupted(packet)) && (packet.seqnum == expectedseqnum) ) { /* == accept packet and send to layer 5 == */
+  if  ((!IsCorrupted(packet)) && (packet.seqnum == expectedseqnum) && isInWindow) { /* == accept packet and send to layer 5 == */
 
     if (TRACE > 0)
       printf("----B: packet %d is correctly received, send ACK!\n",packet.seqnum);
@@ -238,8 +243,10 @@ void B_input(struct pkt packet)
     }
     
   }
-  else if ((!IsCorrupted(packet)) && (packet.seqnum > expectedseqnum)) { /* == buffer packet == */
+  else if ((!IsCorrupted(packet)) && (packet.seqnum > expectedseqnum) && isInWindow) { /* == buffer packet == */
     B_buffer[packet.seqnum] = packet;
+
+    packets_received++;
 
     /* send an ACK for the received packet */
     sendpkt.acknum = packet.seqnum;
