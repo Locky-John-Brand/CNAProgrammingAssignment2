@@ -205,7 +205,7 @@ void A_init(void)
 static int expectedseqnum; /* the sequence number expected next by the receiver */
 static int B_nextseqnum;   /* the sequence number for the next packets sent by B */
 
-struct pkt B_buffer[WINDOWSIZE]; /* buffer to store out of order packets */
+static struct pkt B_buffer[WINDOWSIZE]; /* buffer to store out of order packets */
 
 
 /* called from layer 3, when a packet arrives for layer 4 at B*/
@@ -214,11 +214,8 @@ void B_input(struct pkt packet)
   struct pkt sendpkt;
   int i;
 
-  /* greater than comparison on wrap around sequence numbers */
-  int pktSeqIsGreaterThan = ((packet.seqnum > expectedseqnum) && (packet.seqnum - expectedseqnum <= SEQSPACE / 2)) || ((packet.seqnum < expectedseqnum) && (expectedseqnum - packet.seqnum > SEQSPACE / 2));
-
   /* if not corrupted and received packet is in order */
-  if  ( (!IsCorrupted(packet))  && (packet.seqnum == expectedseqnum) ) { /* == accept packet and send to layer 5 == */
+  if  ( (!IsCorrupted(packet)) && (packet.seqnum == expectedseqnum) ) { /* == accept packet and send to layer 5 == */
 
     if (TRACE > 0)
       printf("----B: packet %d is correctly received, send ACK!\n",packet.seqnum);
@@ -233,7 +230,7 @@ void B_input(struct pkt packet)
     /* update state variables */
     expectedseqnum = (expectedseqnum + 1) % SEQSPACE;
 
-    /* send any packets recieved out of order*/
+    /* send any packets recieved out of order */
     while (B_buffer[expectedseqnum].seqnum != -1) {
       tolayer5(B, B_buffer[expectedseqnum].payload);
       B_buffer[expectedseqnum].seqnum = -1;
@@ -241,8 +238,11 @@ void B_input(struct pkt packet)
     }
     
   }
-  else if ((!IsCorrupted(packet))  && (pktSeqIsGreaterThan)) { /* == buffer packet == */
+  else if ((!IsCorrupted(packet)) && (packet.seqnum > expectedseqnum)) { /* == buffer packet == */
     B_buffer[packet.seqnum] = packet;
+
+    /* send an ACK for the received packet */
+    sendpkt.acknum = packet.seqnum;
   }
   else { /* == ignore packet == */
     /* packet is corrupted or out of order resend last ACK */
