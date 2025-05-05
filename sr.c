@@ -214,8 +214,12 @@ void B_input(struct pkt packet)
   struct pkt sendpkt;
   int i;
 
+  /* greater than comparison on wrap around sequence numbers */
+  int pktSeqIsGreaterThan = ((packet.seqnum > expectedseqnum) && (packet.seqnum - expectedseqnum <= SEQSPACE / 2)) || ((packet.seqnum < expectedseqnum) && (expectedseqnum - packet.seqnum > SEQSPACE / 2));
+
   /* if not corrupted and received packet is in order */
   if  ( (!IsCorrupted(packet))  && (packet.seqnum == expectedseqnum) ) { /* == accept packet and send to layer 5 == */
+
     if (TRACE > 0)
       printf("----B: packet %d is correctly received, send ACK!\n",packet.seqnum);
     packets_received++;
@@ -229,15 +233,15 @@ void B_input(struct pkt packet)
     /* update state variables */
     expectedseqnum = (expectedseqnum + 1) % SEQSPACE;
 
-    /* update packets recieved out of order */
-    for (i = expectedseqnum; (i < WINDOWSIZE) && (B_buffer[i].seqnum != -1); ++i) { /* deliver out of order packets in order */
-      tolayer5(B, B_buffer[i].payload); /* pass on out of order packet recieved earlier */
-      B_buffer[i].seqnum = -1; /* remove from buffer (marks index as empty) */
+    /* send any packets recieved out of order*/
+    while (B_buffer[expectedseqnum].seqnum != -1) {
+      tolayer5(B, B_buffer[expectedseqnum].payload);
+      B_buffer[expectedseqnum].seqnum = -1;
       expectedseqnum = (expectedseqnum + 1) % SEQSPACE;
     }
     
   }
-  else if ((!IsCorrupted(packet))  && (packet.seqnum > expectedseqnum)) { /* == buffer packet == */
+  else if ((!IsCorrupted(packet))  && (pktSeqIsGreaterThan)) { /* == buffer packet == */
     B_buffer[packet.seqnum] = packet;
   }
   else { /* == ignore packet == */
